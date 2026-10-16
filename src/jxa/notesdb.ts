@@ -10,7 +10,9 @@
  */
 
 const PY = String.raw`
-import sqlite3, sys, json, zlib, os, datetime, urllib.parse
+import sqlite3, sys, json, zlib, os, datetime, urllib.parse, time
+started = time.time()
+partial = False
 a = json.loads(sys.argv[1])
 db = a.get('db') or os.path.expanduser('~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite')
 def out(o):
@@ -74,7 +76,9 @@ def fields(b):
         yield f, t, v
 def note_text(blob):
     try:
-        if blob[:2] == b'\x1f\x8b': blob = zlib.decompress(blob, 47)
+        # The note text sits at the start of the document; never inflate more than 2 MB
+        # (drawings and scanned pages can make a single note's data enormous).
+        if blob[:2] == b'\x1f\x8b': blob = zlib.decompressobj(47).decompress(blob, 2000000)
         for f, t, v in fields(blob):
             if f == 2 and t == 2:
                 for f2, t2, v2 in fields(v):
@@ -109,6 +113,10 @@ if q:
                 chunk = ids[i:i + 500]
                 for k, data in cur.execute('SELECT %s, ZDATA FROM ZICNOTEDATA WHERE %s IN (%s)' % (key, key, ','.join('?' * len(chunk))), chunk):
                     if data: texts[k] = note_text(bytes(data))
+                    if time.time() - started > 25:
+                        partial = True
+                        break
+                if partial: break
             for it in items:
                 k = it['nd'] if by_nd else it['pk']
                 if k in texts: bodies[it['pk']] = texts[k]
@@ -139,7 +147,7 @@ for it in items[off:off + lim]:
         'locked': it['locked'],
         'snippet': it['snippet'][:240],
     })
-out({'total': total, 'items': page, 'via': 'database'})
+out({'total': total, 'items': page, 'via': 'database', 'partial': partial})
 `;
 
 export const NOTES_DB = `

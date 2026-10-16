@@ -42,10 +42,10 @@ test("alarms: relative, absolute and all-day anchoring", () => {
 test("markdown round-trips through Notes HTML", () => {
   const md = "# Title\n\nSome **bold**, *italic*, `code` and [a link](https://x.y).\n\n- one\n- two\n  - nested\n1. first\n2. second\n- [ ] todo\n- [x] done\n\n> quoted";
   const html = markdownToNotesHtml(md);
-  assert.match(html, /<h1>Title<\/h1>/);
+  assert.match(html, /<div><b><span style="font-size: 18px">Title<\/span><\/b><\/div>/);
   assert.match(html, /<b>bold<\/b>/);
   assert.match(html, /<i>italic<\/i>/);
-  assert.match(html, /<tt>code<\/tt>/);
+  assert.match(html, /<font face="Menlo-Regular">code<\/font>/);
   assert.match(html, /<a href="https:\/\/x.y">a link<\/a>/);
   assert.match(html, /<ul><li>one<\/li><li>two<\/li><ul><li>nested<\/li><\/ul><\/ul><ol><li>first/);
   assert.match(html, /☐ todo/);
@@ -75,7 +75,7 @@ test("Notes HTML with tables, entities and images converts cleanly", () => {
 test("real-world Notes HTML: styled headings, wrapped list items, monospace", () => {
   const html =
     '<div><b><span style="font-size: 24px">Orchard 测试</span></b><br></div>' +
-    '<div><b><span style="font-size: 18px">今日要点</span></b><br></div>' +
+    '<div><b><span style="font-size: 15px">今日要点</span></b><br></div>' +
     "<div>☐ 支付租金</div>" +
     '<ul><li><div><b>加粗</b> 和 <a href="https://example.com/">链接</a></div></li><li><div>第二</div></li></ul>' +
     "<ol><li><div>第一项</div></li><li><div>第二项</div></li></ol>" +
@@ -87,4 +87,21 @@ test("real-world Notes HTML: styled headings, wrapped list items, monospace", ()
   assert.match(md, /1\. 第一项\n2\. 第二项/);
   assert.match(md, /带 `代码`/);
   assert.doesNotMatch(md, /^\*\*$/m);
+});
+
+test("HTML exactly as Notes on macOS 27 stores it", () => {
+  const html = `<div><b><font face=".AppleSystemUIFontBold"><span style="font-size: 18px">Orchard 测试备忘录</span></font></b></div>
+<div><b><font face=".AppleSystemUIFontBold"><span style="font-size: 15px">今日要点</span></font></b></div>
+<div><span style="font-size: 11px">☐ 支付租金</span></div>
+<ul>
+<li><b><span style="font-size: 11px">加粗</span></b><span style="font-size: 11px"> 和 </span><u><a href="https://example.com/"><span style="font-size: 11px">链接</span></a></u><span style="font-size: 11px"><br></span></li>
+</ul>
+<div><span style="font-size: 11px"><br></span></div>
+<ol>
+<li><font face=".PingFangUITextSC-Regular"><span style="font-size: 11px">第一项</span></font><span style="font-size: 11px"><br></span></li>
+<li><font face=".PingFangUITextSC-Regular"><span style="font-size: 11px">第二项</span></font><span style="font-size: 11px"><br></span></li>
+</ol>
+<div><font face=".PingFangUITextSC-Regular"><span style="font-size: 11px">追加的一行，带</span></font><span style="font-size: 11px"> </span><font face="Menlo-Regular"><span style="font-size: 11px">代码</span></font><span style="font-size: 11px"><br></span></div>`;
+  const md = notesHtmlToMarkdown(html);
+  assert.equal(md, "# Orchard 测试备忘录\n## 今日要点\n☐ 支付租金\n\n- **加粗** 和 [链接](https://example.com/)\n\n1. 第一项\n2. 第二项\n\n追加的一行，带 `代码`");
 });

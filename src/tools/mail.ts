@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { call, HelperError, osa } from "../helper/client.js";
 import * as S from "../jxa/mail.js";
+import { MAIL_FILE_READ } from "../jxa/mailfile.js";
 import { formatIso, parseWall, wallToDate } from "../lib/dates.js";
 import { safe, ToolInputError } from "../lib/errors.js";
 import { clip, fail, fitPage, oneLine, text, untrusted } from "../lib/format.js";
@@ -79,18 +80,37 @@ function validAddress(a: { address: string }): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.address);
 }
 
-async function hintFor(id: number): Promise<{ account_id?: string | null; mailbox?: string } | undefined> {
+async function metaFor(id: number): Promise<MailItem | undefined> {
   try {
-    const meta = await call<MailItem>("mail.get", { id });
-    return meta.mailbox ? { account_id: meta.mailbox.account_id ?? undefined, mailbox: meta.mailbox.mailbox } : undefined;
+    return await call<MailItem>("mail.get", { id });
   } catch {
     return undefined;
   }
 }
 
+function hintOf(meta: MailItem | undefined): { account_id?: string; mailbox?: string } | undefined {
+  return meta?.mailbox ? { account_id: meta.mailbox.account_id ?? undefined, mailbox: meta.mailbox.mailbox } : undefined;
+}
+
+async function hintFor(id: number) {
+  return hintOf(await metaFor(id));
+}
+
 async function readMail(id: number, markRead = false): Promise<MailFull | ScriptError> {
-  const hint = await hintFor(id);
-  return osa<MailFull | ScriptError>("Mail", S.MAIL_READ, { id, hint, mark_read: markRead }, { timeoutS: 120 });
+  const meta = await metaFor(id);
+  const hint = hintOf(meta);
+  // Fast path: read the .emlx file directly (needs Full Disk Access, which the index lookup just proved).
+  if (hint?.account_id && !markRead) {
+    try {
+      const r = await osa<MailFull | ScriptError>("Mail", MAIL_FILE_READ, { id, ...hint }, { timeoutS: 30 });
+      if (!isErr(r)) {
+        return { ...r, date: meta?.date ?? r.date, read: meta?.read ?? null, flagged: meta?.flagged ?? null };
+      }
+    } catch {
+      /* fall back to asking Mail */
+    }
+  }
+  return osa<MailFull | ScriptError>("Mail", S.MAIL_READ, { id, hint, mark_read: markRead });
 }
 
 function quote(m: MailFull): string {
@@ -174,7 +194,7 @@ Examples:
     },
     safe(async ({ id, mark_read, max_chars }) => {
       const m = await readMail(id, mark_read);
-      if (isErr(m)) return fail(`No email with id ${id} could be found in Mail. It may have been moved or deleted; search again.`);
+      if (isErr(m)) return fail(`Email ${id} could not be opened. It may have been moved or deleted (search again), or Mail is still downloading it.`);
       const head = [
         `# ${m.subject || "(no subject)"}`,
         `From: ${m.from}`,

@@ -4,31 +4,39 @@ const PRELUDE = String.raw`
 const Mail = Application('Mail');
 function iso(d) { try { return d ? d.toISOString() : null; } catch (e) { return null; } }
 function first(fn) { try { const r = fn(); return (r && r.length) ? r[0] : null; } catch (e) { return null; } }
+const INBOX_NAMES = ['inbox', '收件箱', '收件匣', 'posteingang', 'boîte de réception', 'bandeja de entrada'];
+function boxIn(acc, name) {
+  const want = String(name).toLowerCase();
+  const isInbox = INBOX_NAMES.indexOf(want) >= 0;
+  let boxes = []; try { boxes = acc.mailboxes(); } catch (e) { return null; }
+  for (let i = 0; i < boxes.length; i++) {
+    let n = ''; try { n = String(boxes[i].name()).toLowerCase(); } catch (e) {}
+    if (n === want || (isInbox && INBOX_NAMES.indexOf(n) >= 0)) return boxes[i];
+  }
+  return null;
+}
 function findMessage(id, hint) {
   id = Number(id);
   let m = null;
-  if (hint && hint.account_id && hint.mailbox) {
-    m = first(function () { return Mail.accounts.byId(hint.account_id).mailboxes.byName(hint.mailbox).messages.whose({ id: id })(); });
-    if (m) return m;
-  }
-  if (hint && hint.mailbox) {
-    const accts = Mail.accounts();
-    for (let i = 0; i < accts.length && !m; i++) {
-      m = first(function () { return accts[i].mailboxes.byName(hint.mailbox).messages.whose({ id: id })(); });
-    }
-    if (m) return m;
-  }
-  m = first(function () { return Mail.inbox.messages.whose({ id: id })(); });
-  if (m) return m;
-  const accts = Mail.accounts();
-  for (let i = 0; i < accts.length; i++) {
-    let boxes = []; try { boxes = accts[i].mailboxes(); } catch (e) {}
-    for (let j = 0; j < boxes.length; j++) {
-      m = first(function () { return boxes[j].messages.whose({ id: id })(); });
-      if (m) return m;
+  if (hint && hint.account_id) {
+    let acc = null; try { acc = Mail.accounts.byId(hint.account_id); acc.name(); } catch (e) { acc = null; }
+    if (acc) {
+      if (hint.mailbox) {
+        m = first(function () { return acc.mailboxes.byName(hint.mailbox).messages.whose({ id: id })(); });
+        if (m) return m;
+        const b = boxIn(acc, hint.mailbox.split('/').pop());
+        if (b) { m = first(function () { return b.messages.whose({ id: id })(); }); if (m) return m; }
+      }
+      // Stay inside the one account: scanning every mailbox of every account takes minutes.
+      let boxes = []; try { boxes = acc.mailboxes(); } catch (e) {}
+      for (let j = 0; j < boxes.length; j++) {
+        m = first(function () { return boxes[j].messages.whose({ id: id })(); });
+        if (m) return m;
+      }
+      return null;
     }
   }
-  return null;
+  return first(function () { return Mail.inbox.messages.whose({ id: id })(); });
 }
 function recips(list) {
   try { return list.map(function (r) { let n = null; try { n = r.name(); } catch (e) {} return n ? n + ' <' + r.address() + '>' : r.address(); }); }

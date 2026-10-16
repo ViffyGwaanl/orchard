@@ -40,15 +40,13 @@ async function notes<T>(script: string, args: unknown, timeoutS = 45): Promise<T
 const isErr = (r: unknown): r is ScriptError => typeof r === "object" && r !== null && "error" in r;
 
 /** Fast path through Notes' own database; null when it is not readable (no Full Disk Access). */
-async function fromDatabase(args: Record<string, unknown>): Promise<{ total: number; items: NoteSummary[] } | null> {
+async function fromDatabase(args: Record<string, unknown>): Promise<{ total: number; items: NoteSummary[]; partial?: boolean } | null> {
   if (process.env.ORCHARD_NOTES_DB === "0") return null;
-  try {
-    const r = await osa<{ total: number; items: NoteSummary[] } | { error: string }>("Notes", NOTES_DB, { ...args, db: process.env.ORCHARD_NOTES_DB_PATH }, { timeoutS: 40 });
-    if ("error" in r) return null;
-    return r;
-  } catch {
-    return null;
-  }
+  const r = await osa<{ total: number; items: NoteSummary[]; partial?: boolean } | { error: string }>("Notes", NOTES_DB, { ...args, db: process.env.ORCHARD_NOTES_DB_PATH }, { timeoutS: 40 });
+  // No database access (no Full Disk Access): let the caller ask Notes.app instead.
+  // A timeout is thrown on purpose, because a fallback would run past the client's time limit.
+  if ("error" in r) return null;
+  return r;
 }
 
 function summaryLine(n: NoteSummary): string {
@@ -125,6 +123,7 @@ export function registerNotesTools(server: McpServer) {
       }
       if (isErr(res)) return fail(scriptError(res));
       const found = res;
+      if ("partial" in found && found.partial) note += "\n\n(Some very large notes were not searched in time; narrow the search with folder.)";
       if (!found.items.length) return text(`No notes contain "${a.query}".${note}`);
       const page = fitPage(found.items, (its) => {
         const more = a.offset + its.length < found.total ? `\n\nMore: call again with offset=${a.offset + its.length}.` : "";

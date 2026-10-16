@@ -26,7 +26,7 @@ function inline(md: string): string {
   s = s.replace(/(^|[^\w_])_([^_\s][^_]*)_(?!\w)/g, "$1<i>$2</i>");
   s = s.replace(/~~([^~]+)~~/g, "<strike>$1</strike>");
   s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (_, pre: string, url: string) => `${pre}<a href="${url}">${url}</a>`);
-  s = s.replace(/\u0000(\d+)\u0000/g, (_, i: string) => `<tt>${escapeHtml(codes[Number(i)])}</tt>`);
+  s = s.replace(/\u0000(\d+)\u0000/g, (_, i: string) => `<font face="Menlo-Regular">${escapeHtml(codes[Number(i)])}</font>`);
   return s;
 }
 
@@ -47,14 +47,17 @@ export function markdownToNotesHtml(md: string): string {
       continue;
     }
     if (inCode) {
-      out.push(`<div><tt>${escapeHtml(line) || "&nbsp;"}</tt></div>`);
+      out.push(`<div><font face="Menlo-Regular">${escapeHtml(line) || "&nbsp;"}</font></div>`);
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
       closeLists();
-      const level = Math.min(3, h[1].length);
-      out.push(`<h${level}>${inline(h[2])}</h${level}>`);
+      // Notes rewrites <h1>/<h2> tags into its own styles and drops <h2> sizing, so write
+      // the styles it uses itself: Title 18px, Heading 15px, Subheading bold.
+      const level = h[1].length;
+      const size = level === 1 ? 18 : level === 2 ? 15 : 0;
+      out.push(size ? `<div><b><span style="font-size: ${size}px">${inline(h[2])}</span></b></div>` : `<div><b>${inline(h[2])}</b></div>`);
       continue;
     }
     const task = line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/);
@@ -138,11 +141,15 @@ export function notesHtmlToMarkdown(html: string): string {
   });
   // Notes wraps list item text in <div>s and marks code with a monospace font.
   s = s.replace(/<li([^>]*)>\s*<div[^>]*>([\s\S]*?)<\/div>\s*<\/li>/gi, "<li$1>$2</li>");
-  s = s.replace(/<span[^>]*font-family:[^>]*(?:Menlo|Courier|Monaco|monospace)[^>]*>([\s\S]*?)<\/span>/gi, "<tt>$1</tt>");
+  s = s.replace(/<span[^>]*font-family:[^>]*(?:Menlo|Courier|Monaco|Mono)[^>]*>([\s\S]*?)<\/span>/gi, "<tt>$1</tt>");
+  s = s.replace(/<font[^>]*face="[^"]*(?:Menlo|Courier|Monaco|Mono)[^"]*"[^>]*>([\s\S]*?)<\/font>/gi, (_, t: string) => `<tt>${t.replace(/<[^>]+>/g, "")}</tt>`);
+  // A trailing <br> inside a list item or a non-empty line is how Notes ends lines, not a blank line.
+  s = s.replace(/<br\s*\/?>((?:\s*<\/(?:span|font|b|i|u)>)*)\s*<\/li>/gi, "$1</li>");
+  s = s.replace(/([^>\s]|<\/(?:span|font|b|i|u|a)>)\s*<br\s*\/?>((?:\s*<\/(?:span|font|b|i|u)>)*)\s*<\/div>/gi, "$1$2</div>");
   // Larger font sizes are how Notes stores Title/Heading/Subheading styles.
   s = s.replace(/<span[^>]*font-size:\s*(\d+)px[^>]*>([\s\S]*?)<\/span>/gi, (_, px: string, t: string) => {
     const n = Number(px);
-    const h = n >= 22 ? "# " : n >= 18 ? "## " : n >= 15 ? "### " : "";
+    const h = n >= 18 ? "# " : n >= 15 ? "## " : "";
     return h ? `\u0001${h}${t}` : t;
   });
   s = s.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "\n# $1\n");
@@ -199,7 +206,12 @@ export function notesHtmlToMarkdown(html: string): string {
   s = s.replace(/\*\*\u0001(#{1,3} )([^\n]*?)\*\*/g, "$1$2").replace(/\u0001/g, "");
   s = s.replace(/\*\*\s*\*\*/g, "").replace(/^\*{1,2}$/gm, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
   // Consecutive list items should not be separated by blank lines.
-  for (let i = 0; i < 2; i++) s = s.replace(/^([ \t]*(?:[-*]|\d+\.) .*)\n\n(?=[ \t]*(?:[-*]|\d+\.) )/gm, "$1\n");
+  for (let i = 0; i < 2; i++) {
+    s = s.replace(/^([ \t]*[-*] .*)\n\n(?=[ \t]*[-*] )/gm, "$1\n");
+    s = s.replace(/^([ \t]*\d+\. .*)\n\n(?=[ \t]*\d+\. )/gm, "$1\n");
+  }
+  // A paragraph right after a list needs a blank line, or Markdown folds it into the last item.
+  s = s.replace(/^([ \t]*(?:[-*]|\d+\.) .*)\n(?=[^\s\-*\d|#])/gm, "$1\n\n");
   return s.trim();
 }
 
