@@ -3,6 +3,7 @@ import * as z from "zod/v4";
 import { call, HelperError, osa } from "../helper/client.js";
 import * as S from "../jxa/mail.js";
 import { MAIL_FILE_READ } from "../jxa/mailfile.js";
+import { MAIL_BULK, MAIL_SENDERS } from "../jxa/mailstats.js";
 import { formatIso, parseWall, wallToDate } from "../lib/dates.js";
 import { safe, ToolInputError } from "../lib/errors.js";
 import { clip, fail, fitPage, oneLine, text, untrusted } from "../lib/format.js";
@@ -13,6 +14,7 @@ export interface MailItem {
   id: number;
   subject: string;
   from: string;
+  from_address?: string;
   from_name?: string | null;
   date: string | null;
   read: boolean;
@@ -65,7 +67,9 @@ export async function searchMail(params: Record<string, unknown>): Promise<{ ite
 
 export function mailLine(m: MailItem): string {
   const flags = `${m.read ? "" : "● "}${m.flagged ? "⚑ " : ""}`;
-  const box = m.mailbox?.mailbox && m.mailbox.mailbox.toUpperCase() !== "INBOX" ? ` · ${m.mailbox.mailbox}` : "";
+  // Gmail keeps inbox mail in "All Mail" with an INBOX label; that folder name is noise here.
+  const name = m.mailbox?.mailbox ?? "";
+  const box = name && !/^inbox$|all mail|所有邮件|全部邮件|收件箱/i.test(name) ? ` · ${name}` : "";
   const preview = m.preview ? `\n    ${oneLine(m.preview, 180)}` : "";
   return `- ${flags}**${oneLine(m.subject || "(no subject)", 120)}** — ${oneLine(m.from_name || m.from, 60)} · ${formatIso(m.date)}${box}  \`${m.id}\`${preview}`;
 }
@@ -116,6 +120,43 @@ async function readMail(id: number, markRead = false): Promise<MailFull | Script
 function quote(m: MailFull): string {
   const body = m.content.split("\n").map((l) => `> ${l}`).join("\n");
   return `On ${formatIso(m.date)}, ${m.from} wrote:\n${body}`;
+}
+
+
+export interface SenderStat {
+  address: string;
+  name: string | null;
+  count: number;
+  latest: string | null;
+  accounts: string[];
+}
+
+export async function senderStats(params: { unread_only?: boolean; from?: string; since_unix?: number; limit?: number }): Promise<{ total: number; sender_count: number; senders: SenderStat[] } | null> {
+  const r = await osa<{ total: number; sender_count: number; senders: SenderStat[] } | { error: string }>("Mail", MAIL_SENDERS, params, { timeoutS: 40 });
+  return "error" in r ? null : r;
+}
+
+let accountCache: { at: number; byId: Map<string, string> } | null = null;
+export async function accountNames(): Promise<Map<string, string>> {
+  if (accountCache && Date.now() - accountCache.at < 10 * 60_000) return accountCache.byId;
+  const r = await osa<{ accounts: { id: string; name: string }[] }>("Mail", S.MAIL_ACCOUNTS, {}, { timeoutS: 40 });
+  accountCache = { at: Date.now(), byId: new Map(r.accounts.map((a) => [a.id, a.name])) };
+  return accountCache.byId;
+}
+
+/** Bulk mail is anything from an automated address or a sender with many unread messages. */
+export function isBulkSender(s: { address: string; name?: string | null; count?: number }): boolean {
+  const a = s.address.toLowerCase();
+  if (/(^|[._-])(no-?reply|donotreply|do-not-reply|newsletter|news|notification|notifications|notify|mailer|marketing|promo|promotion|edm|info|service|support|hello|team|bounce|updates?|digest|alerts?)[._@-]/.test(a)) return true;
+  if (/@(.*\.)?(mail|email|e|em|news|info|mkt|marketing|edm|notice|notifications?)\./.test(a)) return true;
+  if (/广告|\(AD\)|newsletter|通知|订阅/i.test(s.name ?? "")) return true;
+  return (s.count ?? 0) >= 4;
+}
+
+export function senderLine(s: SenderStat, accounts: Map<string, string>, known?: string | null): string {
+  const who = known ? `★ ${known}` : s.name ? s.name : s.address;
+  const where = s.accounts.map((id) => accounts.get(id) ?? id.slice(0, 8)).join(", ");
+  return `- **${oneLine(who, 50)}** <${s.address}> — ${s.count} · latest ${formatIso(s.latest)}${where ? ` · ${where}` : ""}`;
 }
 
 export function registerMailTools(server: McpServer) {
@@ -285,6 +326,86 @@ Replies: pass reply_to_id (an id from mail_search); the original sender becomes 
       const lines = [`${verb}: ${r.done.length}`, ...r.done.map((d) => `- ${oneLine(d.subject, 100)}`)];
       if (r.failed.length) lines.push(`Failed: ${r.failed.length}`, ...r.failed.map((f) => `- ${f.subject ? oneLine(f.subject, 80) : f.id}: ${f.message}`));
       return { content: [{ type: "text", text: lines.join("\n") }], isError: r.done.length === 0 };
+    }),
+  );
+  server.registerTool(
+    "mail_senders",
+    {
+      title: "Who is filling the inbox",
+      description: `Count inbox email by sender across every account, biggest first, over the whole inbox (not just the latest page). Senders who are in Contacts are starred. Use it to triage a crowded inbox, find newsletters to clean up with mail_cleanup, or answer "who emails me most". Needs Full Disk Access.`,
+      inputSchema: z.strictObject({
+        unread_only: z.boolean().default(true),
+        since: z.string().optional().describe(`Only mail received on or after. ${DATE_HELP}`),
+        from: z.string().optional().describe("Only senders whose name or address contains this"),
+        limit: LimitSchema(30, 200),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    safe(async (a) => {
+      const since_unix = a.since ? Math.floor(wallToDate(parseWall(a.since)).getTime() / 1000) : undefined;
+      const r = await senderStats({ unread_only: a.unread_only, from: a.from, since_unix, limit: a.limit });
+      if (!r) return fail("Sender counts need Full Disk Access for Orchard Helper. Call apple_open_settings with pane full_disk_access.");
+      if (!r.senders.length) return text(a.unread_only ? "No unread mail in the inbox." : "No mail matches.");
+      const [accounts, known] = await Promise.all([
+        accountNames().catch(() => new Map<string, string>()),
+        call<Record<string, string | null>>("contacts.resolve", { handles: r.senders.map((x) => x.address) }).catch(() => ({} as Record<string, string | null>)),
+      ]);
+      const lines = r.senders.map((x) => senderLine(x, accounts, known[x.address]));
+      const head = `# ${r.total.toLocaleString("en-US")} ${a.unread_only ? "unread " : ""}inbox emails from ${r.sender_count.toLocaleString("en-US")} senders`;
+      const more = r.sender_count > r.senders.length ? `\n\n…${r.sender_count - r.senders.length} more senders. Raise limit to see them.` : "";
+      return text(`${head}\n${untrusted("mail", lines.join("\n"))}${more}\n\n★ = in Contacts.`);
+    }),
+  );
+
+  server.registerTool(
+    "mail_cleanup",
+    {
+      title: "Clean up mail from one sender",
+      description: `Mark read, flag, move or trash every inbox email from one sender, in one step, across accounts. First call without confirm to preview how many emails and which accounts are affected and show that to the person; only call again with confirm=true after they agree.
+
+Example: "Mark everything from FC2 as read" -> from="fc2", action="mark_read", then confirm=true after the person agrees.`,
+      inputSchema: z.strictObject({
+        from: z.string().min(3).max(200).describe("Text in the sender's name or address, e.g. 'fc2.com' or 'newsletter@example.com'"),
+        action: z.enum(["mark_read", "flag", "move", "trash"]),
+        unread_only: z.boolean().default(true).describe("Only unread messages (default) or every inbox message from the sender"),
+        mailbox: z.string().optional().describe("Destination folder name for move, e.g. 'Archive'"),
+        confirm: z.boolean().default(false).describe("false = preview only; true = apply"),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    safe(async (a) => {
+      if (a.action === "move" && !a.mailbox) throw new ToolInputError("Pass the destination mailbox for move.");
+      const r = await senderStats({ unread_only: a.unread_only, from: a.from, limit: 20 });
+      if (!r) return fail("Cleanup needs Full Disk Access for Orchard Helper to find the emails first. Call apple_open_settings with pane full_disk_access.");
+      if (!r.total) return text(`No ${a.unread_only ? "unread " : ""}inbox email matches "${a.from}".`);
+      const accounts = await accountNames();
+      const ids = [...new Set(r.senders.flatMap((x) => x.accounts))];
+      const verb = { mark_read: "mark as read", flag: "flag", move: `move to ${a.mailbox}`, trash: "move to Trash" }[a.action];
+      const list = r.senders.map((x) => senderLine(x, accounts)).join("\n");
+      if (!a.confirm) {
+        return text(`Preview: this will ${verb} ${r.total} ${a.unread_only ? "unread " : ""}inbox email${r.total === 1 ? "" : "s"} from:\n${untrusted("mail", list)}\n\nAccounts: ${ids.map((id) => accounts.get(id) ?? id).join(", ")}\nShow this to the person; call again with confirm=true only if they agree.`);
+      }
+      const done: string[] = [];
+      for (const id of ids) {
+        const name = accounts.get(id);
+        if (!name) {
+          done.push(`- ${id}: account not found in Mail, skipped`);
+          continue;
+        }
+        try {
+          const res = await osa<{ changed: number }>("Mail", MAIL_BULK, null, {
+            lang: "AppleScript", timeoutS: 45, argv: [name, a.from, a.action, a.unread_only ? "1" : "0", a.mailbox ?? ""],
+          });
+          done.push(`- ${name}: ${res.changed}`);
+        } catch (e) {
+          const timedOut = e instanceof HelperError && e.code === "TIMEOUT";
+          done.push(timedOut
+            ? `- ${name}: Mail was still working when the time limit hit, so part of it may be done. Run the preview again to see what is left.`
+            : `- ${name}: failed (${e instanceof Error ? e.message.split(". ")[0] : String(e)})`);
+        }
+      }
+      const note = a.action === "trash" ? "\nTrashed mail stays in each account's Trash until it is emptied." : "";
+      return text(`Done, ${verb}:\n${done.join("\n")}${note}`);
     }),
   );
 }

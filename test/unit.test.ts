@@ -105,3 +105,13 @@ test("HTML exactly as Notes on macOS 27 stores it", () => {
   const md = notesHtmlToMarkdown(html);
   assert.equal(md, "# Orchard 测试备忘录\n## 今日要点\n☐ 支付租金\n\n- **加粗** 和 [链接](https://example.com/)\n\n1. 第一项\n2. 第二项\n\n追加的一行，带 `代码`");
 });
+
+import { isBulkSender } from "../src/tools/mail.ts";
+test("bulk sender detection keeps people and catches automated mail", () => {
+  assert.equal(isBulkSender({ address: "li.wei@example.com", count: 1 }), false);
+  assert.equal(isBulkSender({ address: "wang@qq.com", count: 2 }), false);
+  assert.equal(isBulkSender({ address: "noreply@github.com", count: 1 }), true);
+  assert.equal(isBulkSender({ address: "send@info.worldaic.com.cn", count: 1 }), true);
+  assert.equal(isBulkSender({ address: "ccsvc@message.cmbchina.com", count: 9 }), true);
+  assert.equal(isBulkSender({ address: "notifications@discord.com", count: 1 }), true);
+});

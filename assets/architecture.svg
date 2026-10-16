@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" font-family="Noto Sans CJK SC">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7FA493"/></marker>
+  </defs>
+  <rect width="1600" height="640" fill="#0D1E17"/>
+  <text x="70" y="78" font-size="34" font-weight="700" fill="#FFFFFF">Orchard 的工作方式</text>
+  <text x="70" y="120" font-size="22" fill="#8FB3A2">所有读写都在你的 Mac 上完成，Claude 只看到你让它查询的那部分</text>
+
+  <!-- Claude -->
+  <rect x="70" y="250" width="250" height="150" rx="22" fill="#1B3328" stroke="#3D6B56"/>
+  <text x="195" y="315" text-anchor="middle" font-size="28" font-weight="700" fill="#FFFFFF">Claude</text>
+  <text x="195" y="352" text-anchor="middle" font-size="19" fill="#9CC2B0">桌面应用 / Claude Code</text>
+  <path d="M320 325 L400 325" stroke="#7FA493" stroke-width="3" marker-end="url(#ar)"/>
+  <text x="360" y="306" text-anchor="middle" font-size="16" fill="#7FA493">MCP</text>
+
+  <!-- Server -->
+  <rect x="405" y="210" width="330" height="230" rx="22" fill="#1B3328" stroke="#3D6B56"/>
+  <text x="570" y="268" text-anchor="middle" font-size="28" font-weight="700" fill="#FFFFFF">Orchard 服务器</text>
+  <text x="570" y="304" text-anchor="middle" font-size="18" fill="#9CC2B0">Node · 37 个工具</text>
+  <text x="570" y="346" text-anchor="middle" font-size="17" fill="#C9DED3">日期解析 · Markdown 转换</text>
+  <text x="570" y="376" text-anchor="middle" font-size="17" fill="#C9DED3">外部内容隔离 · 发送前确认</text>
+  <text x="570" y="406" text-anchor="middle" font-size="17" fill="#C9DED3">今日概览 · 全局搜索</text>
+  <path d="M735 325 L815 325" stroke="#7FA493" stroke-width="3" marker-end="url(#ar)"/>
+  <text x="777" y="300" text-anchor="middle" font-size="15" fill="#7FA493">长连接</text>
+
+  <!-- Helper -->
+  <rect x="820" y="170" width="330" height="310" rx="22" fill="#2A1F14" stroke="#C98A4B"/>
+  <text x="985" y="228" text-anchor="middle" font-size="28" font-weight="700" fill="#FFFFFF">Orchard Helper</text>
+  <text x="985" y="264" text-anchor="middle" font-size="18" fill="#E6B98A">本机编译的 Swift 原生程序</text>
+  <text x="985" y="312" text-anchor="middle" font-size="17" fill="#F1D9C0">以自己的名字申请系统权限</text>
+  <text x="985" y="342" text-anchor="middle" font-size="17" fill="#F1D9C0">授权只给它，不给 Claude</text>
+  <text x="985" y="372" text-anchor="middle" font-size="17" fill="#F1D9C0">不开任何网络端口</text>
+  <text x="985" y="418" text-anchor="middle" font-size="15" fill="#B9906A">提醒事项 · 日历 · 通讯录</text><text x="985" y="444" text-anchor="middle" font-size="15" fill="#B9906A">完全磁盘访问 · 自动化</text>
+
+  <!-- Targets -->
+  <g font-size="19">
+    <rect x="1225" y="150" width="330" height="86" rx="16" fill="#152A21" stroke="#2F5A47"/>
+    <text x="1247" y="186" fill="#FFFFFF" font-weight="700">EventKit · Contacts</text>
+    <text x="1247" y="216" fill="#9CC2B0" font-size="16">提醒事项、日历、通讯录直读直写</text>
+    <rect x="1225" y="256" width="330" height="86" rx="16" fill="#152A21" stroke="#2F5A47"/>
+    <text x="1247" y="292" fill="#FFFFFF" font-weight="700">本地数据库</text>
+    <text x="1247" y="322" fill="#9CC2B0" font-size="16">信息、邮件索引、备忘录，毫秒级搜索</text>
+    <rect x="1225" y="362" width="330" height="86" rx="16" fill="#152A21" stroke="#2F5A47"/>
+    <text x="1247" y="398" fill="#FFFFFF" font-weight="700">邮件原文件</text>
+    <text x="1247" y="428" fill="#9CC2B0" font-size="16">直接解析 .emlx，支持各种中文编码</text>
+    <rect x="1225" y="468" width="330" height="86" rx="16" fill="#152A21" stroke="#2F5A47"/>
+    <text x="1247" y="504" fill="#FFFFFF" font-weight="700">自动化脚本</text>
+    <text x="1247" y="534" fill="#9CC2B0" font-size="16">起草邮件、写备忘录、发信息</text>
+  </g>
+  <g stroke="#C98A4B" stroke-width="2.5" fill="none" marker-end="url(#ar)">
+    <path d="M1150 260 C1190 260 1190 193 1220 193"/>
+    <path d="M1150 300 C1190 300 1190 299 1220 299"/>
+    <path d="M1150 350 C1190 350 1190 405 1220 405"/>
+    <path d="M1150 400 C1190 400 1190 511 1220 511"/>
+  </g>
+  <text x="70" y="600" font-size="18" fill="#6E9483">来自邮件、信息、备忘录的文字一律标成不可信内容，Claude 只把它当资料看，不会照着里面的指令行事。</text>
+</svg>

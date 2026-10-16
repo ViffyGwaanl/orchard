@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" font-family="Noto Sans CJK SC">
+  <rect width="1600" height="1180" fill="#ECE7DE"/>
+  <rect x="140" y="60" width="1320" height="1060" rx="28" fill="#FAF8F4" stroke="#DCD5C8"/>
+  <circle cx="190" cy="104" r="9" fill="#FF5F57"/><circle cx="220" cy="104" r="9" fill="#FEBC2E"/><circle cx="250" cy="104" r="9" fill="#28C840"/>
+  <text x="800" y="112" text-anchor="middle" font-size="22" fill="#8A8376">Claude · Orchard 已连接</text>
+  <line x1="140" y1="146" x2="1460" y2="146" stroke="#E6E0D4"/>
+
+  <!-- user 1 -->
+  <rect x="820" y="186" width="580" height="64" rx="22" fill="#E9E2D3"/>
+  <text x="850" y="227" font-size="25" fill="#2B2722">早上好，帮我看看今天有什么要处理的</text>
+
+  <!-- tool chip -->
+  <rect x="200" y="282" width="210" height="44" rx="12" fill="#F1ECE2" stroke="#E2DACB"/>
+  <text x="222" y="311" font-size="19" fill="#6F6858">⚙ apple_today</text>
+
+  <!-- assistant 1 -->
+  <text x="200" y="378" font-size="25" fill="#2B2722">今天整体不算满，主要有三件事。</text>
+  <g font-size="22" fill="#3B362F">
+    <rect x="200" y="404" width="1200" height="430" rx="18" fill="#FFFFFF" stroke="#E6E0D4"/>
+    <circle cx="236" cy="452" r="9" fill="#FF453A"/><text x="256" y="460" font-weight="700">日程</text>
+    <text x="352" y="460">10:00 产品周会 · 14:30 和李薇对 Q4 预算（会议室 B）</text>
+    <circle cx="236" cy="512" r="9" fill="#FF9F0A"/><text x="256" y="520" font-weight="700">待办</text>
+    <text x="352" y="520">交季度报表（今天到期）· 续费 3A 证书（逾期 1 天，⚠️ 高优先级）</text>
+    <circle cx="236" cy="572" r="9" fill="#0A84FF"/><text x="256" y="580" font-weight="700">邮件</text>
+    <text x="352" y="580">来自人的 2 封：王总问合同附件，李薇发来预算表</text>
+    <text x="352" y="616" fill="#8A8376" font-size="20">另有 186 封通知和订阅，其中 140 封来自同一个购物网站，可以一键标为已读</text>
+    <circle cx="236" cy="668" r="9" fill="#30D158"/><text x="256" y="676" font-weight="700">信息</text>
+    <text x="352" y="676">妈妈问晚上回不回家吃饭（2 条未读）</text>
+    <line x1="232" y1="728" x2="1368" y2="728" stroke="#EFEAE0"/>
+    <text x="232" y="776" font-size="21" fill="#5C564B">建议先回王总的合同邮件，下午会议前把报表交掉，证书续费今天也一并处理。</text>
+    <text x="232" y="810" font-size="21" fill="#5C564B">要我把那 140 封订阅邮件标成已读吗？</text>
+  </g>
+
+  <!-- user 2 -->
+  <rect x="560" y="870" width="840" height="64" rx="22" fill="#E9E2D3"/>
+  <text x="590" y="911" font-size="25" fill="#2B2722">好，标为已读。另外周五下午三点提醒我交报销单，提前一天也提醒</text>
+
+  <!-- assistant 2 -->
+  <rect x="200" y="966" width="420" height="44" rx="12" fill="#F1ECE2" stroke="#E2DACB"/>
+  <text x="222" y="995" font-size="19" fill="#6F6858">⚙ mail_cleanup · reminders_create</text>
+  <text x="200" y="1056" font-size="25" fill="#2B2722">已把 140 封订阅邮件标为已读。新建提醒交报销单，10 月 23 日周五 15:00，</text>
+  <text x="200" y="1094" font-size="25" fill="#2B2722">22 日 15:00 和当天 15:00 各提醒一次，已同步到你的 iPhone。</text>
+</svg>

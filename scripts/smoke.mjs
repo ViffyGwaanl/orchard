@@ -54,6 +54,20 @@ assert.match(out, /Pay office rent/);
 if (fda) assert.match(out, /Fotor brief v2/);
 if (fda) assert.match(out, /<untrusted_content source="messages">/);
 
+// Search everything
+out = await t("apple_search", { query: "Fotor" });
+assert.match(out, /## Reminders/);
+assert.match(out, /Reply to Fotor brief/);
+assert.match(out, /## Calendar[\s\S]*Fotor publish day/);
+if (fda) assert.match(out, /Fotor brief v2/);
+assert.match(out, /## Notes\nFull-text search needs Full Disk Access/);
+out = await t("apple_search", { query: "zzzz-nothing" });
+assert.match(out, /Nothing on this Mac mentions/);
+
+// Mail triage tools degrade gracefully without the index (fake helper has no real Mail store)
+out = await t("mail_senders", {}, true);
+assert.match(out, /Full Disk Access/);
+
 // Reminders
 await t("reminders_list_lists");
 out = await t("reminders_find", { when: "today_and_overdue" });

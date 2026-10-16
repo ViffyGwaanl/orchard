@@ -66,3 +66,26 @@ test("finds messages in nested mailboxes and partial downloads, with GBK text", 
 test("unknown ids report NOT_FOUND", () => {
   assert.equal(run({ id: 99999, account_id: acct, mailbox: "INBOX" }).error, "NOT_FOUND");
 });
+
+import { MAIL_SENDERS_PYTHON } from "../src/jxa/mailstats.ts";
+
+test("sender statistics over the whole inbox, including Gmail's INBOX label", () => {
+  const dir = join(home, "Library/Mail/V10/MailData");
+  mkdirSync(dir, { recursive: true });
+  const sql = `
+CREATE TABLE addresses (ROWID INTEGER PRIMARY KEY, address TEXT, comment TEXT);
+CREATE TABLE mailboxes (ROWID INTEGER PRIMARY KEY, url TEXT, total_count INTEGER, unread_count INTEGER);
+CREATE TABLE messages (ROWID INTEGER PRIMARY KEY, sender INTEGER, subject INTEGER, summary INTEGER, mailbox INTEGER, date_received INTEGER, read INTEGER, deleted INTEGER, flagged INTEGER);
+CREATE TABLE labels (message_id INTEGER, mailbox_id INTEGER);
+INSERT INTO addresses VALUES (1,'News@FC2.com','FC2 Content Market'),(2,'li@example.com','Li Wei'),(3,'bot@spam.test','Bot');
+INSERT INTO mailboxes VALUES (1,'imap://${acct}/INBOX',10,5),(2,'imap://F9CA2CAD-BB55-4704-BA12-400CA8219572/%5BGmail%5D/All%20Mail',10,5),(3,'imap://F9CA2CAD-BB55-4704-BA12-400CA8219572/INBOX',0,0),(4,'imap://${acct}/Archive',1,1);
+INSERT INTO messages VALUES (1,1,0,0,1,1792000000,0,0,0),(2,1,0,0,1,1792000100,0,0,0),(3,1,0,0,2,1792000200,0,0,0),(4,2,0,0,1,1792000300,0,0,0),(5,2,0,0,1,1792000400,1,0,0),(6,3,0,0,4,1792000500,0,0,0),(7,3,0,0,1,1792000600,0,1,0);
+INSERT INTO labels VALUES (3,3);`;
+  execFileSync("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.executescript(sys.argv[2]); c.commit()", join(dir, "Envelope Index"), sql]);
+  const r = JSON.parse(execFileSync("python3", ["-c", MAIL_SENDERS_PYTHON, JSON.stringify({ unread_only: true })], { encoding: "utf8", env: { ...process.env, HOME: home } }));
+  assert.equal(r.total, 4, "archived, read and deleted mail is excluded");
+  assert.deepEqual(r.senders.map((x: { address: string; count: number }) => [x.address, x.count]), [["news@fc2.com", 3], ["li@example.com", 1]]);
+  assert.deepEqual(r.senders[0].accounts.sort(), [acct, "F9CA2CAD-BB55-4704-BA12-400CA8219572"].sort());
+  const only = JSON.parse(execFileSync("python3", ["-c", MAIL_SENDERS_PYTHON, JSON.stringify({ from: "fc2" })], { encoding: "utf8", env: { ...process.env, HOME: home } }));
+  assert.equal(only.total, 3);
+});

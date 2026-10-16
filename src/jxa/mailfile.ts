@@ -69,12 +69,16 @@ def text_of(part):
 def html_to_text(h):
     h = re.sub(r'(?is)<(script|style|head)[^>]*>.*?</\1>', '', h)
     h = re.sub(r'(?i)<br\s*/?>', '\n', h)
+    h = re.sub(r'(?i)</t[dh]>', '\t', h)
     h = re.sub(r'(?i)</(p|div|tr|li|h\d|table)>', '\n', h)
     h = re.sub(r'(?i)<a [^>]*href="([^"]+)"[^>]*>(.*?)</a>', lambda m: m.group(2) if m.group(1) in m.group(2) else '%s (%s)' % (m.group(2), m.group(1)), h)
     h = re.sub(r'<[^>]+>', '', h)
     h = html.unescape(h)
-    h = re.sub(r'[ \t ]+', ' ', h)
-    return re.sub(r'\n\s*\n\s*\n+', '\n\n', h).strip()
+    out_lines = []
+    for line in h.split('\n'):
+        cells = [re.sub(r'[ \u00a0\u200b]+', ' ', c).strip() for c in line.split('\t')]
+        out_lines.append(' · '.join(c for c in cells if c))
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(out_lines)).strip()
 
 content = ''
 try:

@@ -4,3 +4,4 @@ build/
 out/
 .test-build/
 test/smoke-transcript*.md
+scratch/
