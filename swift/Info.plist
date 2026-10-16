@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Linked into the helper's __TEXT,__info_plist section at build time.
+  A bare executable has no bundle, so without this section macOS has no
+  usage strings for the process and silently refuses Reminders, Calendar
+  and Contacts requests. Both the base key and the full-access key are
+  required for Reminders and Calendars on macOS 14 and later.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>app.orchard.helper</string>
+    <key>CFBundleName</key>
+    <string>Orchard Helper</string>
+    <key>CFBundleDisplayName</key>
+    <string>Orchard Helper</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Orchard lets Claude read and manage your reminders on this Mac. Nothing leaves your computer except what you ask Claude about.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Orchard lets Claude read and manage your reminders on this Mac. Nothing leaves your computer except what you ask Claude about.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Orchard lets Claude read and manage your calendar events on this Mac.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Orchard lets Claude read and manage your calendar events on this Mac.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Orchard looks up names, phone numbers and email addresses so Claude knows who your messages and emails are from.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Orchard controls Mail, Notes and Messages so Claude can read, draft and send on your behalf when you ask.</string>
+</dict>
+</plist>

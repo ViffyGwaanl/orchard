@@ -1,0 +1,31 @@
+{
+  "name": "orchard-mcp-server",
+  "version": "1.0.0",
+  "description": "Orchard: Reminders, Calendar, Notes, Mail, Messages and Contacts on your Mac, for Claude.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "orchard-mcp-server": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=20.3"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && node scripts/bundle.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "pack": "node scripts/pack.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.3.1",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3"
+  }
+}
