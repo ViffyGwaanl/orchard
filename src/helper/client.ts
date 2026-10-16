@@ -124,11 +124,14 @@ export async function osa<T = unknown>(
   args: unknown,
   opts: { lang?: "JavaScript" | "AppleScript"; timeoutS?: number; raw?: boolean; argv?: string[] } = {},
 ): Promise<T> {
-  const timeoutS = opts.timeoutS ?? 60;
+  // Clients (and the remote-device bridge) give a tool call about a minute, so
+  // scripts are stopped before that and report a clear timeout instead.
+  const cap = Number(process.env.ORCHARD_SCRIPT_TIMEOUT ?? 50);
+  const timeoutS = Math.min(opts.timeoutS ?? 45, cap);
   const out = await call<string>(
     "osa.run",
     { app, script, lang: opts.lang ?? "JavaScript", args: opts.argv ?? [JSON.stringify(args ?? {})], timeout_s: timeoutS },
-    { timeoutMs: (timeoutS + 10) * 1000 },
+    { timeoutMs: (timeoutS + 5) * 1000 },
   );
   if (opts.raw) return out as T;
   try {

@@ -5,6 +5,7 @@
  * properties are both callable and assignable, make/move/delete, and push.
  */
 import vm from "node:vm";
+import { execSync } from "node:child_process";
 
 function matches(el, filter) {
   for (const [k, v] of Object.entries(filter)) {
@@ -225,11 +226,17 @@ export function makeMailApp(seed) {
 }
 
 export function runJxa(script, apps, args) {
+  const Application = (name) => {
+    if (!apps[name]) throw new Error(`No mock for ${name}`);
+    return apps[name];
+  };
+  // Standard Additions: doShellScript really runs the command, like on a Mac.
+  Application.currentApplication = () => ({
+    includeStandardAdditions: true,
+    doShellScript: (cmd) => execSync(cmd.replace(/^\/usr\/bin\/python3 /, "python3 "), { shell: "/bin/sh", encoding: "utf8" }).replace(/\n$/, ""),
+  });
   const ctx = vm.createContext({
-    Application: (name) => {
-      if (!apps[name]) throw new Error(`No mock for ${name}`);
-      return apps[name];
-    },
+    Application,
     Path: (p) => ({ path: p }),
     delay: () => {},
     JSON, Date, String, Number, Object, Math, Array, Error,

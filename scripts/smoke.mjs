@@ -111,6 +111,8 @@ out = await t("notes_list", { limit: 10 });
 assert.match(out, /Fotor ideas/);
 assert.match(out, /🔒/);
 out = await t("notes_search", { query: "4K" });
+assert.match(out, /Searched titles only/, "without the database, body search falls back to titles");
+out = await t("notes_search", { query: "Standup" });
 assert.match(out, /Standup 10\/15/);
 const shopId = (await t("notes_search", { query: "Shopping", titles_only: true })).match(/`(x-coredata[^`]+)`/)[1];
 out = await t("notes_read", { id: shopId });

@@ -90,6 +90,17 @@ export function registerSystemTools(server: McpServer) {
     safe(async () => {
       try {
         const s = await call<Status>("system.status", {}, { timeoutMs: 600_000 });
+        // Some macOS releases report "not determined" for a grant that is in fact active.
+        // A quick read settles it without changing anything.
+        for (const [key, method] of [["reminders", "reminders.lists"], ["calendars", "calendar.calendars"]] as const) {
+          if (s[key] !== "not_determined") continue;
+          try {
+            await call(method, {}, { timeoutMs: 4000 });
+            s[key] = "granted";
+          } catch {
+            /* still not granted, or a dialog is waiting */
+          }
+        }
         return text(statusReport(s));
       } catch (e) {
         if (e instanceof HelperError) {

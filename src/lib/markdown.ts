@@ -136,6 +136,15 @@ export function notesHtmlToMarkdown(html: string): string {
     const rest = rows.slice(1).map((r) => `| ${r.join(" | ")} |`);
     return `\n${[head, sep, ...rest].join("\n")}\n`;
   });
+  // Notes wraps list item text in <div>s and marks code with a monospace font.
+  s = s.replace(/<li([^>]*)>\s*<div[^>]*>([\s\S]*?)<\/div>\s*<\/li>/gi, "<li$1>$2</li>");
+  s = s.replace(/<span[^>]*font-family:[^>]*(?:Menlo|Courier|Monaco|monospace)[^>]*>([\s\S]*?)<\/span>/gi, "<tt>$1</tt>");
+  // Larger font sizes are how Notes stores Title/Heading/Subheading styles.
+  s = s.replace(/<span[^>]*font-size:\s*(\d+)px[^>]*>([\s\S]*?)<\/span>/gi, (_, px: string, t: string) => {
+    const n = Number(px);
+    const h = n >= 22 ? "# " : n >= 18 ? "## " : n >= 15 ? "### " : "";
+    return h ? `\u0001${h}${t}` : t;
+  });
   s = s.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "\n# $1\n");
   s = s.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "\n## $1\n");
   s = s.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "\n### $1\n");
@@ -165,8 +174,18 @@ export function notesHtmlToMarkdown(html: string): string {
   });
   s = s.replace(/<br\s*\/?>/gi, "\n");
   s = s.replace(/<\/(div|p)>/gi, "\n").replace(/<(div|p)[^>]*>/gi, "");
-  s = s.replace(/<(b|strong)[^>]*>([\s\S]*?)<\/\1>/gi, (_, __, t: string) => (t.trim() ? `**${t}**` : t));
-  s = s.replace(/<(i|em)[^>]*>([\s\S]*?)<\/\1>/gi, (_, __, t: string) => (t.trim() ? `*${t}*` : t));
+  const wrap = (mark: string) => (_: string, __: string, t: string) => {
+    const m = t.match(/^(\s*)([\s\S]*?)(\s*)$/)!;
+    if (!m[2]) return t;
+    // Keep line breaks outside the markers so headings and lists stay intact.
+    return m[2].split("\n").map((line, i, all) => {
+      const pre = i === 0 ? m[1] : "";
+      const post = i === all.length - 1 ? m[3] : "";
+      return line.trim() ? `${pre}${mark}${line.trim()}${mark}${post}` : `${pre}${post}`;
+    }).join("\n");
+  };
+  s = s.replace(/<(b|strong)[^>]*>([\s\S]*?)<\/\1>/gi, wrap("**"));
+  s = s.replace(/<(i|em)[^>]*>([\s\S]*?)<\/\1>/gi, wrap("*"));
   s = s.replace(/<(strike|s|del)[^>]*>([\s\S]*?)<\/\1>/gi, "~~$2~~");
   s = s.replace(/<tt[^>]*>([\s\S]*?)<\/tt>/gi, "`$1`");
   s = s.replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, url: string, text: string) => {
@@ -177,7 +196,10 @@ export function notesHtmlToMarkdown(html: string): string {
   s = s.replace(/<object[^>]*>[\s\S]*?<\/object>/gi, "[attachment]");
   s = s.replace(/<[^>]+>/g, "");
   s = decodeEntities(s);
-  s = s.replace(/\*\*\s*\*\*/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  s = s.replace(/\*\*\u0001(#{1,3} )([^\n]*?)\*\*/g, "$1$2").replace(/\u0001/g, "");
+  s = s.replace(/\*\*\s*\*\*/g, "").replace(/^\*{1,2}$/gm, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  // Consecutive list items should not be separated by blank lines.
+  for (let i = 0; i < 2; i++) s = s.replace(/^([ \t]*(?:[-*]|\d+\.) .*)\n\n(?=[ \t]*(?:[-*]|\d+\.) )/gm, "$1\n");
   return s.trim();
 }
 

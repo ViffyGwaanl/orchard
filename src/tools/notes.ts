@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { osa } from "../helper/client.js";
 import * as S from "../jxa/notes.js";
+import { NOTES_DB } from "../jxa/notesdb.js";
 import { formatIso } from "../lib/dates.js";
 import { safe, ToolInputError } from "../lib/errors.js";
 import { clip, fail, fitPage, oneLine, plural, text, untrusted } from "../lib/format.js";
@@ -33,10 +34,22 @@ function scriptError(r: ScriptError): string {
   }
 }
 
-async function notes<T>(script: string, args: unknown, timeoutS = 60): Promise<T | ScriptError> {
+async function notes<T>(script: string, args: unknown, timeoutS = 45): Promise<T | ScriptError> {
   return osa<T | ScriptError>("Notes", script, args, { timeoutS });
 }
 const isErr = (r: unknown): r is ScriptError => typeof r === "object" && r !== null && "error" in r;
+
+/** Fast path through Notes' own database; null when it is not readable (no Full Disk Access). */
+async function fromDatabase(args: Record<string, unknown>): Promise<{ total: number; items: NoteSummary[] } | null> {
+  if (process.env.ORCHARD_NOTES_DB === "0") return null;
+  try {
+    const r = await osa<{ total: number; items: NoteSummary[] } | { error: string }>("Notes", NOTES_DB, { ...args, db: process.env.ORCHARD_NOTES_DB_PATH }, { timeoutS: 40 });
+    if ("error" in r) return null;
+    return r;
+  } catch {
+    return null;
+  }
+}
 
 function summaryLine(n: NoteSummary): string {
   const snip = oneLine(n.snippet.replace(n.name, ""), 160);
@@ -76,7 +89,7 @@ export function registerNotesTools(server: McpServer) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     safe(async (a) => {
-      const res = await notes<{ total: number; items: NoteSummary[] }>(S.NOTES_LIST, a, 90);
+      const res = (await fromDatabase(a)) ?? (await notes<{ total: number; items: NoteSummary[] }>(S.NOTES_LIST, a));
       if (isErr(res)) return fail(scriptError(res));
       if (!res.items.length) return text("No notes found.");
       const page = fitPage(res.items, (its) => {
@@ -102,12 +115,20 @@ export function registerNotesTools(server: McpServer) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     safe(async (a) => {
-      const res = await notes<{ total: number; items: NoteSummary[] }>(S.NOTES_SEARCH, a, 120);
+      let res: { total: number; items: NoteSummary[] } | ScriptError | null = await fromDatabase(a);
+      let note = "";
+      if (res === null) {
+        // Without the database, Notes.app can only search titles quickly; body search over
+        // Apple Events takes minutes on large libraries.
+        res = await notes<{ total: number; items: NoteSummary[] }>(S.NOTES_SEARCH, { ...a, titles_only: true });
+        if (!a.titles_only) note = "\n\n(Searched titles only. Full-text search of note bodies needs Full Disk Access for Orchard Helper; apple_open_settings can open it.)";
+      }
       if (isErr(res)) return fail(scriptError(res));
-      if (!res.items.length) return text(`No notes contain "${a.query}".`);
-      const page = fitPage(res.items, (its) => {
-        const more = a.offset + its.length < res.total ? `\n\nMore: call again with offset=${a.offset + its.length}.` : "";
-        return `# ${plural(res.total, "note")} match${res.total === 1 ? "es" : ""} "${a.query}"\n${untrusted("notes", its.map(summaryLine).join("\n"))}${more}`;
+      const found = res;
+      if (!found.items.length) return text(`No notes contain "${a.query}".${note}`);
+      const page = fitPage(found.items, (its) => {
+        const more = a.offset + its.length < found.total ? `\n\nMore: call again with offset=${a.offset + its.length}.` : "";
+        return `# ${plural(found.total, "note")} match${found.total === 1 ? "es" : ""} "${a.query}"\n${untrusted("notes", its.map(summaryLine).join("\n"))}${more}${note}`;
       });
       return text(page.text);
     }),
@@ -121,15 +142,20 @@ export function registerNotesTools(server: McpServer) {
       inputSchema: z.strictObject({
         id: z.string().min(1),
         max_chars: z.number().int().min(500).max(100_000).default(20_000),
+        format: z.enum(["markdown", "html"]).default("markdown").describe("html returns Notes' stored HTML unchanged"),
       }),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    safe(async ({ id, max_chars }) => {
+    safe(async ({ id, max_chars, format }) => {
       const n = await notes<{ id: string; name: string; folder: string | null; locked: boolean; created: string; modified: string; body: string | null; attachments: (string | null)[] }>(S.NOTES_READ, { id });
       if (isErr(n)) return fail(scriptError(n));
       const head = [`# ${n.name}`, `Folder: ${n.folder ?? "?"} · created ${formatIso(n.created)} · edited ${formatIso(n.modified)}`];
       if (n.attachments.length) head.push(`Attachments: ${n.attachments.map((x) => x ?? "unnamed").join(", ")}`);
       if (n.locked || n.body === null) return text(`${head.join("\n")}\n\n🔒 This note is locked; its contents are not readable.`);
+      if (format === "html") {
+        const c = clip(n.body, max_chars);
+        return text(`${head.join("\n")}\n\n${untrusted("notes", c.text)}`);
+      }
       let md = notesHtmlToMarkdown(n.body);
       const firstLine = md.split("\n")[0].replace(/^#+\s*|\*\*/g, "").trim();
       if (firstLine === n.name.trim()) md = md.split("\n").slice(1).join("\n").trim();

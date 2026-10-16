@@ -71,3 +71,20 @@ test("Notes HTML with tables, entities and images converts cleanly", () => {
   assert.match(md, /\| a \| b \|\n\| --- \| --- \|\n\| 1 \| 2 \|/);
   assert.match(md, /\[image\]/);
 });
+
+test("real-world Notes HTML: styled headings, wrapped list items, monospace", () => {
+  const html =
+    '<div><b><span style="font-size: 24px">Orchard 测试</span></b><br></div>' +
+    '<div><b><span style="font-size: 18px">今日要点</span></b><br></div>' +
+    "<div>☐ 支付租金</div>" +
+    '<ul><li><div><b>加粗</b> 和 <a href="https://example.com/">链接</a></div></li><li><div>第二</div></li></ul>' +
+    "<ol><li><div>第一项</div></li><li><div>第二项</div></li></ol>" +
+    '<div>带 <span style="font-family: Menlo-Regular">代码</span></div><div><b><br></b></div>';
+  const md = notesHtmlToMarkdown(html);
+  assert.match(md, /^# Orchard 测试$/m);
+  assert.match(md, /^## 今日要点$/m);
+  assert.match(md, /- \*\*加粗\*\* 和 \[链接\]\(https:\/\/example.com\/\)\n- 第二/);
+  assert.match(md, /1\. 第一项\n2\. 第二项/);
+  assert.match(md, /带 `代码`/);
+  assert.doesNotMatch(md, /^\*\*$/m);
+});
