@@ -82,9 +82,19 @@ node_help() {
 
 UID_NUM="$(id -u)"
 load_agent() { # load_agent label plist
+  # bootout 是异步的，旧服务还没完全退出时 bootstrap 会报 5: Input/output error，所以先等它退干净
   launchctl bootout "gui/$UID_NUM/$1" >/dev/null 2>&1 || true
-  launchctl bootstrap "gui/$UID_NUM" "$2"
+  for _ in $(seq 1 20); do
+    launchctl print "gui/$UID_NUM/$1" >/dev/null 2>&1 || break
+    sleep 0.5
+  done
   launchctl enable "gui/$UID_NUM/$1" >/dev/null 2>&1 || true
+  for _ in 1 2 3 4 5; do
+    if launchctl bootstrap "gui/$UID_NUM" "$2" >/dev/null 2>&1; then return 0; fi
+    sleep 1
+  done
+  # 最后一次把 launchctl 的原话显示出来
+  launchctl bootstrap "gui/$UID_NUM" "$2" || die "没能注册 ${1}。请运行 launchctl print gui/$UID_NUM/$1 看一下，再把结果发给我。"
 }
 
 [ "$(uname -s)" = "Darwin" ] || die "这个脚本只能在 macOS 上运行。"
