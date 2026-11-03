@@ -104,8 +104,11 @@ export async function runRemoteCommand(command: string, args: string[]): Promise
     try {
       const r = await fetch(new URL("/healthz", cfg.publicUrl), { signal: AbortSignal.timeout(8000) });
       publicHealth = r.ok ? "reachable" : `answered ${r.status}`;
-    } catch {
-      /* unreachable */
+    } catch (err) {
+      // Name the cause (DNS, timeout, TLS) so a failed check can be diagnosed.
+      const e = err as { name?: string; cause?: { code?: string; message?: string } };
+      const reason = e.name === "TimeoutError" ? "timed out" : (e.cause?.code ?? e.cause?.message);
+      if (reason) publicHealth = `unreachable: ${reason}`;
     }
     console.log(`Public URL:   ${cfg.publicUrl} (${publicHealth})`);
     console.log(`Local server: http://127.0.0.1:${cfg.port} (${health})`);
