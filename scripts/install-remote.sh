@@ -12,6 +12,7 @@
 #   ./scripts/install-remote.sh                       按提示一步步来
 #   ./scripts/install-remote.sh --host orchard.example.com
 #   ./scripts/install-remote.sh --reset-passphrase    换一个新口令，所有已连接的客户端需要重新登录
+#   ./scripts/install-remote.sh --protocol quic       隧道改用 QUIC（默认 http2，经过代理软件时更稳定）
 #
 # 其中两步需要你自己操作，脚本会停下来提示：在浏览器里登录 Cloudflare，以及在 claude.ai 添加连接器。
 
@@ -31,6 +32,7 @@ TUNNEL_NAME="${ORCHARD_TUNNEL_NAME:-orchard}"
 PORT="${ORCHARD_PORT:-8787}"
 HOST=""
 RESET=0
+PROTOCOL="${ORCHARD_TUNNEL_PROTOCOL:-http2}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -39,10 +41,12 @@ while [ $# -gt 0 ]; do
     --port) PORT="${2:-}"; shift 2 ;;
     --tunnel-name) TUNNEL_NAME="${2:-}"; shift 2 ;;
     --reset-passphrase) RESET=1; shift ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    --protocol) PROTOCOL="${2:-}"; shift 2 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "不认识的参数 $1，用 --help 查看用法" >&2; exit 2 ;;
   esac
 done
+case "$PROTOCOL" in http2|quic|auto) ;; *) echo "--protocol 只能是 http2、quic 或 auto" >&2; exit 2 ;; esac
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 step() { printf '\n\033[1;32m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
@@ -247,6 +251,8 @@ cat > "$CF_CONFIG" <<EOF
 tunnel: $TUNNEL_ID
 credentials-file: "$CRED_FILE"
 no-autoupdate: true
+# 默认用 http2（TCP）。Clash、Surge 这类代理软件转发 QUIC（UDP）时容易超时断线。
+protocol: $PROTOCOL
 ingress:
   - hostname: $HOST
     service: http://127.0.0.1:$PORT
@@ -337,6 +343,13 @@ else
   warn "暂时还连不上 ${PUBLIC_URL}。新建的 DNS 记录有时要几分钟才生效，稍后可以运行下面的命令再看："
   echo "  \"$NODE_BIN\" \"$APP_DIR/dist/index.js\" remote-status"
   echo "  日志：tail -50 \"$LOG_DIR/tunnel.log\""
+  if grep -q 'ip=198\.1[89]\.' "$LOG_DIR/tunnel.log" 2>/dev/null; then
+    echo
+    echo "  日志显示隧道经过了代理软件（198.18 开头的地址来自 Clash、Surge 等的 fake-ip 模式）。"
+    echo "  这种情况下本机自检常常失败，但 claude.ai 不一定连不上，可以先去添加连接器试试。"
+    echo "  想让隧道更稳定，在代理软件的规则里把 argotunnel.com、cloudflare.com 和 ${HOST} 设成直连（DIRECT），"
+    echo "  并把它们加进 fake-ip 过滤名单，然后运行 launchctl kickstart -k gui/$UID_NUM/$TUNNEL_LABEL 重启隧道。"
+  fi
 fi
 
 # ---------- 10. 在 claude.ai 添加连接器（你来操作） ----------

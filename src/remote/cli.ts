@@ -9,6 +9,7 @@
  * Messages go to stderr. When a new passphrase is created it is the only thing
  * printed to stdout, so the install script can put it in the Keychain.
  */
+import { lookup } from "node:dns/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -111,6 +112,16 @@ export async function runRemoteCommand(command: string, args: string[]): Promise
       if (reason) publicHealth = `unreachable: ${reason}`;
     }
     console.log(`Public URL:   ${cfg.publicUrl} (${publicHealth})`);
+    if (publicHealth !== "reachable") {
+      const address = await lookup(new URL(cfg.publicUrl).hostname).then((a) => a.address, () => "");
+      // 198.18.0.0/15 is where Clash, Surge and similar proxies hand out fake-ip answers.
+      if (/^198\.1[89]\./.test(address)) {
+        console.log(
+          `              ${address} is a proxy fake-ip, so this check went through your proxy app.\n` +
+            "              claude.ai may still reach Orchard; try adding the connector.",
+        );
+      }
+    }
     console.log(`Local server: http://127.0.0.1:${cfg.port} (${health})`);
     console.log(`Signed-in clients: ${clients}, active sessions: ${tokens}`);
     return 0;
