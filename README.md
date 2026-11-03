@@ -95,6 +95,8 @@ cd ~/orchard
 
 连接器能不能用，取决于这台 Mac 是否开机、已登录并且联网。服务在登录后才启动，所以 Mac 重启后要先登录一次，也可以在系统设置的用户与群组里打开自动登录。安装时默认让 Orchard 阻止 Mac 空闲睡眠，但合上笔记本盖子仍然会睡眠，睡眠期间连接器会断开。长期使用的话，建议放在一台插着电源、不合盖的 Mac 上。
 
+如果 Mac 上开着 Clash、Surge 这类代理软件，隧道的流量也会经过它。安装脚本默认让隧道走 http2，经过代理时比 QUIC 稳定。想更稳的话，在代理规则里把 argotunnel.com、cloudflare.com 和你的连接器域名设成直连（DIRECT），使用 fake-ip 模式的话也把它们加进 fake-ip 过滤名单，改完运行 `launchctl kickstart -k gui/$(id -u)/app.orchard.tunnel` 重启隧道。代理开着的时候，本机运行 remote-status 显示连不上并不代表 claude.ai 也连不上，以 claude.ai 里能否连接为准。
+
 ### 安全
 
 这个地址能读写你的邮件、日历和信息，所以登录始终开着，没有可以关掉登录的选项，也请不要自己改成免登录。具体做法如下。
