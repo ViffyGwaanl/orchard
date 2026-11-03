@@ -21,7 +21,7 @@ if [ "${1:-}" = "--tunnel" ]; then
   CLOUDFLARED="$(command -v cloudflared || echo "$ORCHARD_HOME/bin/cloudflared")"
   if [ -x "$CLOUDFLARED" ]; then
     "$CLOUDFLARED" tunnel cleanup "$TUNNEL_NAME" >/dev/null 2>&1 || true
-    "$CLOUDFLARED" tunnel delete "$TUNNEL_NAME" && echo "已删除 Cloudflare 隧道 $TUNNEL_NAME。指向它的 DNS 记录请在 Cloudflare 面板里手动删除。"
+    "$CLOUDFLARED" tunnel delete "$TUNNEL_NAME" && echo "已删除 Cloudflare 隧道 ${TUNNEL_NAME}。指向它的 DNS 记录请在 Cloudflare 面板里手动删除。"
   fi
 fi
 

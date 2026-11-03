@@ -55,6 +55,27 @@ ask_yes() { # ask_yes "问题" 默认(y/n)
 }
 pause() { read -r -p "$1" _ || true; }
 
+# 终端里的 PATH 不一定包含 Homebrew 或 nvm 装的 node，这里把常见位置都找一遍。
+# Claude 桌面应用自带的 node 只给它自己用，这里用不了。
+find_node() {
+  local c
+  c="$(command -v node 2>/dev/null || true)"
+  if [ -n "$c" ]; then echo "$c"; return; fi
+  for c in /opt/homebrew/bin/node /usr/local/bin/node "$HOME"/.nvm/versions/node/*/bin/node "$HOME"/.volta/bin/node "$HOME"/.local/share/fnm/aliases/default/bin/node; do
+    if [ -x "$c" ]; then echo "$c"; return; fi
+  done
+}
+node_help() {
+  echo
+  echo "Orchard 远程模式需要 Node.js 20.3 或更新版本。安装方法如下，装好后重新运行本脚本："
+  if command -v brew >/dev/null 2>&1 || [ -x /opt/homebrew/bin/brew ] || [ -x /usr/local/bin/brew ]; then
+    echo "  在终端运行 brew install node"
+  else
+    echo "  这台 Mac 没有 Homebrew。最简单的办法是打开 https://nodejs.org 下载 LTS 版的 macOS 安装包，双击安装。"
+  fi
+  echo "  装好后关掉这个终端窗口，重新打开一个，再运行 node -v 确认能看到版本号。"
+}
+
 UID_NUM="$(id -u)"
 load_agent() { # load_agent label plist
   launchctl bootout "gui/$UID_NUM/$1" >/dev/null 2>&1 || true
@@ -67,14 +88,14 @@ load_agent() { # load_agent label plist
 # ---------- 只换口令 ----------
 if [ "$RESET" = "1" ]; then
   [ -f "$APP_DIR/dist/index.js" ] || die "还没有安装远程模式，请先不带参数运行一次。"
-  NODE_BIN="$(command -v node || true)"; [ -n "$NODE_BIN" ] || die "找不到 node。"
+  NODE_BIN="$(find_node)"; [ -n "$NODE_BIN" ] || { node_help; die "没有找到 node。"; }
   # 先停掉服务，避免它在重置过程中把旧的登录记录写回去
   launchctl bootout "gui/$UID_NUM/$SERVER_LABEL" >/dev/null 2>&1 || true
   PASS="$("$NODE_BIN" "$APP_DIR/dist/index.js" remote-reset)"
   security add-generic-password -U -a "$(id -un)" -s "$KEYCHAIN_SERVICE" -w "$PASS" >/dev/null
   if [ -f "$AGENT_DIR/$SERVER_LABEL.plist" ]; then load_agent "$SERVER_LABEL" "$AGENT_DIR/$SERVER_LABEL.plist"; fi
   bold "新口令：$PASS"
-  echo "已存进钥匙串（名称 $KEYCHAIN_SERVICE）。所有已连接的 Claude 需要在连接器里重新登录一次。"
+  echo "已存进钥匙串（名称 ${KEYCHAIN_SERVICE}）。所有已连接的 Claude 需要在连接器里重新登录一次。"
   exit 0
 fi
 
@@ -93,13 +114,20 @@ EOF
 
 # ---------- 1. 检查 Node ----------
 step "检查 Node.js"
-NODE_BIN="$(command -v node || true)"
-[ -n "$NODE_BIN" ] || die "没有找到 node。请先安装 Node.js 20 或更新版本，例如运行 brew install node，然后重新运行本脚本。"
+NODE_BIN="$(find_node)"
+if [ -z "$NODE_BIN" ]; then
+  node_help
+  die "没有找到 node。"
+fi
 NODE_BIN="$(cd "$(dirname "$NODE_BIN")" && pwd -P)/$(basename "$NODE_BIN")"
-"$NODE_BIN" -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>20||(a===20&&b>=3)?0:1)' \
-  || die "Node.js 版本太旧（$("$NODE_BIN" -v)），需要 20.3 或更新。"
-command -v npm >/dev/null || die "没有找到 npm。"
-echo "使用 $NODE_BIN（$("$NODE_BIN" -v)）"
+NODE_DIR="$(dirname "$NODE_BIN")"
+export PATH="$NODE_DIR:$PATH"
+if ! "$NODE_BIN" -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>20||(a===20&&b>=3)?0:1)'; then
+  node_help
+  die "这台 Mac 上的 Node.js 版本太旧（$("$NODE_BIN" -v)），需要 20.3 或更新。"
+fi
+command -v npm >/dev/null || die "找到了 node，但没有找到 npm。请用上面提到的方式重新安装 Node.js。"
+echo "使用 ${NODE_BIN}（$("$NODE_BIN" -v)）"
 
 # ---------- 2. 域名和选项 ----------
 step "选择公开地址"
@@ -143,7 +171,7 @@ NEW_PASS=0
 if [ -n "$PASS" ]; then
   security add-generic-password -U -a "$(id -un)" -s "$KEYCHAIN_SERVICE" -w "$PASS" >/dev/null
   NEW_PASS=1
-  echo "已生成新口令并存进钥匙串（名称 $KEYCHAIN_SERVICE），安装结束时会显示。"
+  echo "已生成新口令并存进钥匙串（名称 ${KEYCHAIN_SERVICE}），安装结束时会显示。"
 else
   echo "沿用已有的口令。忘记的话可以运行 security find-generic-password -s \"$KEYCHAIN_SERVICE\" -w 查看。"
 fi
@@ -158,7 +186,7 @@ if [ -z "$CLOUDFLARED" ]; then
   else
     ARCH="$(uname -m)"; [ "$ARCH" = "arm64" ] || ARCH="amd64"
     TMP="$(mktemp -d)"
-    echo "没有 Homebrew，从 Cloudflare 的 GitHub 发布页下载 cloudflared（$ARCH）"
+    echo "没有 Homebrew，从 Cloudflare 的 GitHub 发布页下载 cloudflared（${ARCH}）"
     curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-$ARCH.tgz" -o "$TMP/cloudflared.tgz"
     tar -xzf "$TMP/cloudflared.tgz" -C "$TMP"
     install -m 755 "$TMP/cloudflared" "$BIN_DIR/cloudflared"
@@ -167,7 +195,7 @@ if [ -z "$CLOUDFLARED" ]; then
   fi
 fi
 CLOUDFLARED="$(cd "$(dirname "$CLOUDFLARED")" && pwd -P)/$(basename "$CLOUDFLARED")"
-echo "使用 $CLOUDFLARED（$("$CLOUDFLARED" --version 2>&1 | head -1)）"
+echo "使用 ${CLOUDFLARED}（$("$CLOUDFLARED" --version 2>&1 | head -1)）"
 
 # ---------- 6. 登录 Cloudflare（你来操作） ----------
 step "登录 Cloudflare"
@@ -196,9 +224,9 @@ if [ -z "$TUNNEL_ID" ]; then
   "$CLOUDFLARED" tunnel create "$TUNNEL_NAME"
   TUNNEL_ID="$(tunnel_id)"
 fi
-[ -n "$TUNNEL_ID" ] || die "没能建立隧道 $TUNNEL_NAME。"
+[ -n "$TUNNEL_ID" ] || die "没能建立隧道 ${TUNNEL_NAME}。"
 CRED_FILE="$HOME/.cloudflared/$TUNNEL_ID.json"
-[ -f "$CRED_FILE" ] || die "隧道 $TUNNEL_NAME 已经存在，但这台 Mac 上没有它的凭证文件 $CRED_FILE。请换个名字重新运行：./scripts/install-remote.sh --tunnel-name orchard-mac"
+[ -f "$CRED_FILE" ] || die "隧道 $TUNNEL_NAME 已经存在，但这台 Mac 上没有它的凭证文件 ${CRED_FILE}。请换个名字重新运行：./scripts/install-remote.sh --tunnel-name orchard-mac"
 echo "隧道 ID $TUNNEL_ID"
 
 if ! "$CLOUDFLARED" tunnel route dns "$TUNNEL_ID" "$HOST"; then
@@ -222,7 +250,6 @@ chmod 600 "$CF_CONFIG"
 # ---------- 8. launchd 服务 ----------
 step "注册开机自动运行的服务"
 xml_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
-NODE_DIR="$(dirname "$NODE_BIN")"
 SERVER_PLIST="$AGENT_DIR/$SERVER_LABEL.plist"
 TUNNEL_PLIST="$AGENT_DIR/$TUNNEL_LABEL.plist"
 
@@ -280,7 +307,7 @@ EOF
 plutil -lint "$SERVER_PLIST" "$TUNNEL_PLIST" >/dev/null
 load_agent "$SERVER_LABEL" "$SERVER_PLIST"
 load_agent "$TUNNEL_LABEL" "$TUNNEL_PLIST"
-echo "已注册 $SERVER_LABEL 和 $TUNNEL_LABEL，登录这台 Mac 后会自动启动，意外退出也会自动重启。"
+echo "已注册 $SERVER_LABEL 和 ${TUNNEL_LABEL}，登录这台 Mac 后会自动启动，意外退出也会自动重启。"
 
 # ---------- 9. 自检 ----------
 step "检查服务"
@@ -300,7 +327,7 @@ done
 if [ "$ok" = "1" ]; then
   echo "公网地址正常，未登录的请求会被拒绝（401），这是预期的"
 else
-  warn "暂时还连不上 $PUBLIC_URL。新建的 DNS 记录有时要几分钟才生效，稍后可以运行下面的命令再看："
+  warn "暂时还连不上 ${PUBLIC_URL}。新建的 DNS 记录有时要几分钟才生效，稍后可以运行下面的命令再看："
   echo "  \"$NODE_BIN\" \"$APP_DIR/dist/index.js\" remote-status"
   echo "  日志：tail -50 \"$LOG_DIR/tunnel.log\""
 fi
@@ -319,7 +346,7 @@ EOF
 echo
 if [ "$NEW_PASS" = "1" ]; then
   bold "你的访问口令：$PASS"
-  echo "（已存进钥匙串，名称 $KEYCHAIN_SERVICE。以后可以用 security find-generic-password -s \"$KEYCHAIN_SERVICE\" -w 查看）"
+  echo "（已存进钥匙串，名称 ${KEYCHAIN_SERVICE}。以后可以用 security find-generic-password -s \"$KEYCHAIN_SERVICE\" -w 查看）"
 else
   echo "口令沿用之前的，查看方法：security find-generic-password -s \"$KEYCHAIN_SERVICE\" -w"
 fi
