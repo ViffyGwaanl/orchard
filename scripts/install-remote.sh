@@ -215,16 +215,23 @@ fi
 
 # ---------- 7. 建立隧道 ----------
 step "建立 Cloudflare Tunnel：$TUNNEL_NAME"
+# cloudflared 的 JSON 里，没删除的隧道 deleted_at 是 0001-01-01T00:00:00Z，不是空值。
 tunnel_id() {
   "$CLOUDFLARED" tunnel list --name "$TUNNEL_NAME" --output json 2>/dev/null \
-    | "$NODE_BIN" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const a=JSON.parse(s)||[];const t=a.find(x=>x.name===process.argv[1]&&!x.deleted_at);if(t)console.log(t.id)}catch{}})' "$TUNNEL_NAME"
+    | "$NODE_BIN" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const a=JSON.parse(s)||[];const live=(x)=>!x.deleted_at||String(x.deleted_at).startsWith("0001-");const t=a.find(x=>x&&x.name===process.argv[1]&&live(x));if(t&&t.id)console.log(t.id)}catch{}})' "$TUNNEL_NAME"
 }
+UUID_RE='[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}'
 TUNNEL_ID="$(tunnel_id)"
-if [ -z "$TUNNEL_ID" ]; then
-  "$CLOUDFLARED" tunnel create "$TUNNEL_NAME"
-  TUNNEL_ID="$(tunnel_id)"
+if [ -n "$TUNNEL_ID" ]; then
+  echo "这个账号里已经有名为 $TUNNEL_NAME 的隧道，直接沿用。"
+else
+  CREATE_OUT="$("$CLOUDFLARED" tunnel create "$TUNNEL_NAME" 2>&1)" || { echo "$CREATE_OUT"; die "cloudflared 没能建立隧道 ${TUNNEL_NAME}，上面是它给出的原因。"; }
+  echo "$CREATE_OUT"
+  # 先从 create 的输出里取 id，取不到再查一次列表
+  TUNNEL_ID="$(printf '%s\n' "$CREATE_OUT" | grep -i 'created tunnel' | grep -o "$UUID_RE" | head -1 || true)"
+  [ -n "$TUNNEL_ID" ] || TUNNEL_ID="$(tunnel_id)"
 fi
-[ -n "$TUNNEL_ID" ] || die "没能建立隧道 ${TUNNEL_NAME}。"
+[ -n "$TUNNEL_ID" ] || die "隧道 ${TUNNEL_NAME} 建好了，但没能读到它的 ID。请运行 cloudflared tunnel list 看一下，再把结果发给我。"
 CRED_FILE="$HOME/.cloudflared/$TUNNEL_ID.json"
 [ -f "$CRED_FILE" ] || die "隧道 $TUNNEL_NAME 已经存在，但这台 Mac 上没有它的凭证文件 ${CRED_FILE}。请换个名字重新运行：./scripts/install-remote.sh --tunnel-name orchard-mac"
 echo "隧道 ID $TUNNEL_ID"
