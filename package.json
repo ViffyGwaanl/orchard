@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "pack": "node scripts/pack.mjs"
+    "pack": "node scripts/pack.mjs",
+    "smoke:http": "node scripts/smoke-http.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",
