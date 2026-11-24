@@ -1,6 +1,6 @@
 {
   "name": "orchard-mcp-server",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Orchard: Reminders, Calendar, Notes, Mail, Messages and Contacts on your Mac, for Claude.",
   "type": "module",
   "license": "MIT",
@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "pack": "node scripts/pack.mjs"
+    "pack": "node scripts/pack.mjs",
+    "smoke:http": "node scripts/smoke-http.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",
